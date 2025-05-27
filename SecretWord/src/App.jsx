@@ -5,7 +5,7 @@ import StartScreen from './components/StartScreen'
 import Game from './components/Game'
 import GameOver from './components/GameOver'
 // React
-import { useState } from "react";
+import { useState, useEffect, useCallback } from "react";
 // data
 import { wordsList } from "./data/words";
 
@@ -15,6 +15,8 @@ const stages = [
   { id: 3, name: "end" },
 ]
 
+const guessesQty = 3
+
 function App() {
 
   const [gameStage, setGameStage] = useState(stages[0].name);
@@ -22,10 +24,16 @@ function App() {
 
   const [pickedWord, setPickedWord] = useState("");
   const [pickedCategory, setPickedCategory] = useState("");
-  const [letters, setLetters] = useState([]);
+  const [letters, setLetters] = useState([])
+
+  const [guessedLetters, setGuessedLetters] = useState([]);
+  const [wrongLetters, setWrongLetters] = useState([]);
+  const [guesses, setGuesses] = useState(guessesQty);
+  const [score, setScore] = useState(0);
 
 
-  const pickWordAndCategory = () => {
+
+  const pickWordAndCategory = useCallback(() => {
     // pick a random category
     const categories = Object.keys(words);
     const category =
@@ -41,15 +49,17 @@ function App() {
 
     return { word, category }
 
-  };
+  }, [words]);
 
 
 
 
   //começa o jogo
-  const startGame = () => {
+  const startGame = useCallback(() => {
     const { word, category } = pickWordAndCategory();
 
+    clearLetterStates('')
+    
     // create an array of letters
     let wordLetters = word.split("");
 
@@ -60,15 +70,77 @@ function App() {
     console.log(word, category)
     console.log(wordLetters)
 
-    
-    setGameStage(stages[1].name);
-  };
+    setPickedWord(word);
+    setPickedCategory(category);
+    setLetters(wordLetters);
 
-  const verifyLetter = () => {
-    setGameStage(stages[2].name);
+
+    setGameStage(stages[1].name);
+  }, [pickWordAndCategory]);
+
+  // process the letter input
+  const verifyLetter = (letter) => {
+    const normalizedLetter = letter.toLowerCase();
+
+    // check if letter has already been utilized
+    if (
+      guessedLetters.includes(normalizedLetter) ||
+      wrongLetters.includes(normalizedLetter)
+    ) {
+      return;
+    }
+
+    // push guessed letter or remove a guess
+    if (letters.includes(normalizedLetter)) {
+      setGuessedLetters((actualGuessedLetters) => [
+        ...actualGuessedLetters,
+        normalizedLetter,
+      ]);
+    } else {
+      setWrongLetters((actualWrongLetters) => [
+        ...actualWrongLetters,
+        normalizedLetter,
+      ]);
+
+      setGuesses((actualGuesses) => actualGuesses - 1)
+    }
+
   }
 
+  const clearLetterStates = () => {
+    setGuessedLetters([]);
+    setWrongLetters([]);
+  };
+
+  useEffect(() => {
+    if (guesses <= 0) {
+      // reset all states
+      clearLetterStates();
+
+      setGameStage(stages[2].name);
+    }
+  }, [guesses]);
+
+  // check win condition
+  useEffect(() => {
+    const uniqueLetters = [...new Set(letters)];
+
+    // win condition
+    if (guessedLetters.length === uniqueLetters.length) {
+      // add score
+      setScore((actualScore) => (actualScore += 100));
+
+      // restart game with new word
+      startGame();
+    }
+  }, [guessedLetters, letters, startGame]);
+
+
+
   const retry = () => {
+    setScore(0)
+    setGuesses(guessesQty)
+
     setGameStage(stages[0].name);
   }
 
@@ -78,9 +150,23 @@ function App() {
     <>
       <div className="App">
         {gameStage === "start" && <StartScreen startGame={startGame} />}
-        {gameStage === "game" && <Game verifyLetter={verifyLetter} />}
-        {gameStage === "end" && <GameOver retry={retry} />}
+
+        {gameStage === "game" && (
+          <Game
+            verifyLetter={verifyLetter}
+            pickedWord={pickedWord}
+            pickedCategory={pickedCategory}
+            letters={letters}
+            guessedLetters={guessedLetters}
+            wrongLetters={wrongLetters}
+            guesses={guesses}
+            score={score}
+          />
+        )}
+
+        {gameStage === "end" && <GameOver retry={retry} score={score} />}
       </div>
+
 
     </>
   )
